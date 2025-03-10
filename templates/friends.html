@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+
+{% block title %}Friends - Video Chat Roulette{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Friends</h1>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Add Friend</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('add_friend') }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Send Friend Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <ul class="nav nav-tabs mb-4" id="friendsTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="friends-tab" data-bs-toggle="tab" data-bs-target="#friends" type="button" role="tab">
+                    Friends
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab">
+                    Pending Requests
+                    {% if pending_requests %}
+                        <span class="badge bg-danger ms-1">{{ pending_requests|length }}</span>
+                    {% endif %}
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="sent-tab" data-bs-toggle="tab" data-bs-target="#sent" type="button" role="tab">
+                    Sent Requests
+                    {% if sent_requests %}
+                        <span class="badge bg-info ms-1">{{ sent_requests|length }}</span>
+                    {% endif %}
+                </button>
+            </li>
+        </ul>
+        
+        <div class="tab-content" id="friendsTabsContent">
+            <div class="tab-pane fade show active" id="friends" role="tabpanel">
+                <div class="card">
+                    <div class="card-body">
+                        {% if friends %}
+                            <div class="list-group">
+                                {% for friend in friends %}
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h5 class="mb-1">{{ friend.username }}</h5>
+                                            <small class="text-muted">Joined {{ friend.created_at.strftime('%Y-%m-%d') }}</small>
+                                        </div>
+                                        <div>
+                                            <a href="{{ url_for('chat', user_id=friend.id) }}" class="btn btn-sm btn-outline-primary me-2">
+                                                <i class="fas fa-comment me-1"></i> Message
+                                            </a>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="text-muted">You don't have any friends yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-pane fade" id="pending" role="tabpanel">
+                <div class="card">
+                    <div class="card-body">
+                        {% if pending_requests %}
+                            <div class="list-group">
+                                {% for user in pending_requests %}
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h5 class="mb-1">{{ user.username }}</h5>
+                                            <small class="text-muted">Sent request on {{ user.received_friend_requests.filter_by(user_id=user.id, friend_id=current_user.id).first().created_at.strftime('%Y-%m-%d') }}</small>
+                                        </div>
+                                        <div>
+                                            <a href="{{ url_for('accept_friend', request_id=user.received_friend_requests.filter_by(user_id=user.id, friend_id=current_user.id).first().id) }}" class="btn btn-sm btn-success me-2">
+                                                <i class="fas fa-check me-1"></i> Accept
+                                            </a>
+                                            <a href="{{ url_for('reject_friend', request_id=user.received_friend_requests.filter_by(user_id=user.id, friend_id=current_user.id).first().id) }}" class="btn btn-sm btn-danger">
+                                                <i class="fas fa-times me-1"></i> Reject
+                                            </a>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="text-muted">No pending friend requests.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-pane fade" id="sent" role="tabpanel">
+                <div class="card">
+                    <div class="card-body">
+                        {% if sent_requests %}
+                            <div class="list-group">
+                                {% for user in sent_requests %}
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h5 class="mb-1">{{ user.username }}</h5>
+                                            <small class="text-muted">Request sent on {{ current_user.sent_friend_requests.filter_by(user_id=current_user.id, friend_id=user.id).first().created_at.strftime('%Y-%m-%d') }}</small>
+                                        </div>
+                                        <span class="badge bg-warning text-dark">Pending</span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="text-muted">No sent friend requests.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

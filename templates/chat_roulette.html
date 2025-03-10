@@ -1,0 +1,314 @@
+{% extends 'base.html' %}
+
+{% block title %}Chat Roulette - Video Chat Roulette{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Video Chat Roulette</h1>
+        
+        <div class="video-container">
+            <video id="remoteVideo" autoplay playsinline></video>
+            <video id="localVideo" autoplay playsinline muted></video>
+            
+            <div id="waitingMessage" class="position-absolute top-50 start-50 translate-middle text-white text-center">
+                <div class="spinner-border mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h3>Waiting for a match...</h3>
+            </div>
+            
+            <button id="addFriendBtn" class="btn btn-success friend-request-btn d-none">
+                <i class="fas fa-user-plus me-2"></i> Add Friend
+            </button>
+            
+            <div class="video-controls">
+                <div class="control-btn" id="toggleMicBtn">
+                    <i class="fas fa-microphone"></i>
+                </div>
+                <div class="control-btn" id="toggleVideoBtn">
+                    <i class="fas fa-video"></i>
+                </div>
+                <div class="control-btn danger" id="nextBtn">
+                    <i class="fas fa-forward"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4 text-center">
+            <button id="startBtn" class="btn btn-primary btn-lg">Start Chatting</button>
+            <button id="stopBtn" class="btn btn-danger btn-lg d-none">Stop Chatting</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const socket = io();
+        
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const waitingMessage = document.getElementById('waitingMessage');
+        const toggleMicBtn = document.getElementById('toggleMicBtn');
+        const toggleVideoBtn = document.getElementById('toggleVideoBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const addFriendBtn = document.getElementById('addFriendBtn');
+        
+        let localStream = null;
+        let peer = null;
+        let currentRoom = null;
+        let currentPeerId = null;
+        
+        // Hide waiting message initially
+        waitingMessage.classList.add('d-none');
+        
+        // Start button click handler
+        startBtn.addEventListener('click', async () => {
+            try {
+                // Get user media
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
+                
+                // Show stop button, hide start button
+                startBtn.classList.add('d-none');
+                stopBtn.classList.remove('d-none');
+                
+                // Show waiting message
+                waitingMessage.classList.remove('d-none');
+                
+                // Join roulette
+                socket.emit('join_roulette');
+            } catch (error) {
+                console.error('Error accessing media devices:', error);
+                alert('Could not access camera or microphone. Please check your permissions.');
+            }
+        });
+        
+        // Stop button click handler
+        stopBtn.addEventListener('click', () => {
+            stopChatting();
+        });
+        
+        // Toggle microphone
+        toggleMicBtn.addEventListener('click', () => {
+            if (localStream) {
+                const audioTracks = localStream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    const isEnabled = audioTracks[0].enabled;
+                    audioTracks[0].enabled = !isEnabled;
+                    
+                    // Update icon
+                    const icon = toggleMicBtn.querySelector('i');
+                    if (isEnabled) {
+                        icon.classList.remove('fa-microphone');
+                        icon.classList.add('fa-microphone-slash');
+                    } else {
+                        icon.classList.remove('fa-microphone-slash');
+                        icon.classList.add('fa-microphone');
+                    }
+                }
+            }
+        });
+        
+        // Toggle video
+        toggleVideoBtn.addEventListener('click', () => {
+            if (localStream) {
+                const videoTracks = localStream.getVideoTracks();
+                if (videoTracks.length > 0) {
+                    const isEnabled = videoTracks[0].enabled;
+                    videoTracks[0].enabled = !isEnabled;
+                    
+                    // Update icon
+                    const icon = toggleVideoBtn.querySelector('i');
+                    if (isEnabled) {
+                        icon.classList.remove('fa-video');
+                        icon.classList.add('fa-video-slash');
+                    } else {
+                        icon.classList.remove('fa-video-slash');
+                        icon.classList.add('fa-video');
+                    }
+                }
+            }
+        });
+        
+        // Next button click handler
+        nextBtn.addEventListener('click', () => {
+            if (peer) {
+                // Destroy current peer connection
+                peer.destroy();
+                peer = null;
+                
+                // Clear remote video
+                remoteVideo.srcObject = null;
+                
+                // Hide add friend button
+                addFriendBtn.classList.add('d-none');
+                
+                // Show waiting message
+                waitingMessage.classList.remove('d-none');
+                
+                // Leave current room
+                if (currentRoom) {
+                    socket.emit('leave_room', { room_id: currentRoom });
+                    currentRoom = null;
+                }
+                
+                // Join roulette again
+                socket.emit('join_roulette');
+            }
+        });
+        
+        // Add friend button click handler
+        addFriendBtn.addEventListener('click', async () => {
+            if (currentPeerId) {
+                try {
+                    const response = await fetch(`/add-friend-during-chat/${currentPeerId}`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        alert(data.message);
+                        // Disable button after successful request
+                        addFriendBtn.disabled = true;
+                        addFriendBtn.innerHTML = '<i class="fas fa-check me-2"></i> Friend Request Sent';
+                    } else {
+                        alert(data.error);
+                    }
+                } catch (error) {
+                    console.error('Error adding friend:', error);
+                    alert('An error occurred while sending friend request.');
+                }
+            }
+        });
+        
+        // Socket event handlers
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+        
+        socket.on('match_found', (data) => {
+            console.log('Match found:', data);
+            
+            // Hide waiting message
+            waitingMessage.classList.add('d-none');
+            
+            // Show add friend button
+            addFriendBtn.classList.remove('d-none');
+            addFriendBtn.disabled = false;
+            addFriendBtn.innerHTML = '<i class="fas fa-user-plus me-2"></i> Add Friend';
+            
+            // Save current peer ID and room
+            currentPeerId = data.peer_id;
+            currentRoom = data.room_id;
+            
+            // Join the room
+            socket.emit('join_room', { room_id: data.room_id });
+            
+            // Initialize peer connection
+            initPeerConnection(data.room_id, true);
+        });
+        
+        socket.on('signal', (data) => {
+            console.log('Received signal:', data);
+            
+            if (peer) {
+                try {
+                    peer.signal(data.signal_data);
+                } catch (error) {
+                    console.error('Error handling signal:', error);
+                }
+            }
+        });
+        
+        // Initialize WebRTC peer connection
+        function initPeerConnection(roomId, initiator) {
+            // Create new peer connection
+            peer = new SimplePeer({
+                initiator: initiator,
+                stream: localStream,
+                trickle: false
+            });
+            
+            // Peer event handlers
+            peer.on('signal', (data) => {
+                console.log('Generated signal:', data);
+                socket.emit('signal', {
+                    room_id: roomId,
+                    signal_data: data
+                });
+            });
+            
+            peer.on('stream', (stream) => {
+                console.log('Received remote stream');
+                remoteVideo.srcObject = stream;
+            });
+            
+            peer.on('close', () => {
+                console.log('Peer connection closed');
+                remoteVideo.srcObject = null;
+            });
+            
+            peer.on('error', (err) => {
+                console.error('Peer connection error:', err);
+                stopChatting();
+            });
+        }
+        
+        // Stop chatting function
+        function stopChatting() {
+            // Destroy peer connection if exists
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+            
+            // Stop local stream
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            
+            // Clear videos
+            localVideo.srcObject = null;
+            remoteVideo.srcObject = null;
+            
+            // Hide stop button, show start button
+            stopBtn.classList.add('d-none');
+            startBtn.classList.remove('d-none');
+            
+            // Hide waiting message and add friend button
+            waitingMessage.classList.add('d-none');
+            addFriendBtn.classList.add('d-none');
+            
+            // Leave roulette
+            socket.emit('leave_roulette');
+            
+            // Leave room if in one
+            if (currentRoom) {
+                socket.emit('leave_room', { room_id: currentRoom });
+                currentRoom = null;
+                currentPeerId = null;
+            }
+            
+            // Reset mic and video buttons
+            const micIcon = toggleMicBtn.querySelector('i');
+            micIcon.classList.remove('fa-microphone-slash');
+            micIcon.classList.add('fa-microphone');
+            
+            const videoIcon = toggleVideoBtn.querySelector('i');
+            videoIcon.classList.remove('fa-video-slash');
+            videoIcon.classList.add('fa-video');
+        }
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            stopChatting();
+        });
+    });
+</script>
+{% endblock %}
+

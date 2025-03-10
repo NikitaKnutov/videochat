@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+
+{% block title %}Chat with {{ friend.username }} - Video Chat Roulette{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+    <h1 class="mb-0">Chat with {{ friend.username }}</h1>
+    <a href="{{ url_for('messages') }}" class="btn btn-outline-secondary ms-auto">
+        <i class="fas fa-arrow-left me-2"></i> Back to Messages
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h4 class="mb-0">{{ friend.username }}</h4>
+    </div>
+    <div class="card-body p-0">
+        <div class="chat-container p-3" id="chatContainer">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="message {% if message.sender_id == current_user.id %}message-sent{% else %}message-received{% endif %}">
+                        <div class="message-content">{{ message.content }}</div>
+                        <div class="message-time small text-muted">{{ message.created_at.strftime('%H:%M | %d %b') }}</div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-comments fa-3x mb-3"></i>
+                    <p>No messages yet. Start the conversation!</p>
+                </div>
+            {% endif %}
+        </div>
+        <div class="card-footer">
+            <form id="messageForm" class="d-flex">
+                <input type="hidden" id="receiverId" value="{{ friend.id }}">
+                <input type="text" id="messageContent" class="form-control me-2" placeholder="Type your message..." required>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const socket = io();
+        const chatContainer = document.getElementById('chatContainer');
+        const messageForm = document.getElementById('messageForm');
+        const messageContent = document.getElementById('messageContent');
+        const receiverId = document.getElementById('receiverId').value;
+        
+        // Scroll to bottom of chat
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        // Scroll to bottom on page load
+        scrollToBottom();
+        
+        // Join user's room for receiving messages
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+        
+        // Listen for new messages
+        socket.on('new_message', (data) => {
+            // Only process messages for this chat
+            if (data.sender_id == receiverId && data.receiver_id == {{ current_user.id }}) {
+                // Create message element
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message message-received';
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content';
+                contentDiv.textContent = data.content;
+                
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'message-time small text-muted';
+                timeDiv.textContent = data.timestamp;
+                
+                messageDiv.appendChild(contentDiv);
+                messageDiv.appendChild(timeDiv);
+                
+                // Add to chat container
+                chatContainer.appendChild(messageDiv);
+                
+                // Scroll to bottom
+                scrollToBottom();
+            }
+        });
+        
+        // Send message
+        messageForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const content = messageContent.value.trim();
+            if (!content) return;
+            
+            try {
+                const response = await fetch('/send-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        receiver_id: receiverId,
+                        content: content
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Create message element
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'message message-sent';
+                    
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = 'message-content';
+                    contentDiv.textContent = content;
+                    
+                    const timeDiv = document.createElement('div');
+                    timeDiv.className = 'message-time small text-muted';
+                    timeDiv.textContent = data.message.timestamp;
+                    
+                    messageDiv.appendChild(contentDiv);
+                    messageDiv.appendChild(timeDiv);
+                    
+                    // Add to chat container
+                    chatContainer.appendChild(messageDiv);
+                    
+                    // Clear input
+                    messageContent.value = '';
+                    
+                    // Scroll to bottom
+                    scrollToBottom();
+                } else {
+                    console.error('Error sending message:', data.error);
+                    alert('Error sending message. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                alert('Error sending message. Please try again.');
+            }
+        });
+    });
+</script>
+{% endblock %}
+

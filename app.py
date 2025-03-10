@@ -13,7 +13,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///videochat.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")  # Вместо "eventlet"  
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
@@ -463,8 +463,9 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
     
-    port = int(os.environ.get("PORT", 5000))  # Получаем порт из окружения или используем 5000
-    socketio.run(app, host='0.0.0.0', port=port, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)
+
 
 
 

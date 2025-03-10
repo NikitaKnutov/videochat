@@ -6,3 +6,4 @@ Werkzeug==2.3.7
 python-dotenv==1.0.0
 simple-websocket==0.10.0
 eventlet==0.33.3
+psycopg2-binary==2.9.6 

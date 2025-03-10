@@ -462,5 +462,9 @@ def handle_signal(data):
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    socketio.run(app, debug=True)
+    
+    port = int(os.environ.get("PORT", 5000))  # Получаем порт из окружения или используем 5000
+    socketio.run(app, host='0.0.0.0', port=port, debug=True)
+
+
 

@@ -10,7 +10,7 @@ from datetime import datetime
 app = Flask(__name__)
 
 # Конфигурация для PostgreSQL
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', '136987456321458525901204')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://user:password@host:port/database')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
